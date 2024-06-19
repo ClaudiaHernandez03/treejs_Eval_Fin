@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Examen 3D</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+        }
+
+        .move-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        .slider {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="moveInfo" class="move-info">
+        <br>
+        <br>
+
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./build/three.module.js",
+            "three/addons/": "./jsm/"
+        }
+    }
+</script>
+
+    <script type="module">
+        // Importar módulos necesarios de three.js
+        import * as THREE from './build/three.module.js';
+        import Stats from './jsm/libs/stats.module.js';
+        import { OrbitControls } from './jsm/controls/OrbitControls.js';
+        import { FBXLoader } from './jsm/loaders/FBXLoader.js';
+
+        let camera, scene, renderer, stats, object, loader, mixer;
+        const clock = new THREE.Clock();
+        const step = 50; // Paso para movimiento del objeto
+        const cameraStep = 20; // Paso para movimiento de la cámara
+
+        const params = {
+            asset: 'Standing Greeting' // Animación inicial
+        };
+
+        const assets = [
+            'Bashful',
+            'Fall B Land To Standing Idle',
+            'Jogging',
+            'Standard Walk',
+            'Hip Hop Dancing',
+            'Sitting Clap',
+        ];
+
+        init();
+
+        function init() {
+            // Crear contenedor para la escena
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // Configuración de la cámara
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+            camera.position.set(100, 200, 300);
+
+            // Crear la escena
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color('#e5acf5');
+            const initialFogDistance = 1000;
+            scene.fog = new THREE.Fog('#ed0051', initialFogDistance * 0.5, initialFogDistance);
+
+            // Añadir luces a la escena
+            const hemiLight = new THREE.HemisphereLight('white', 'white', 5);
+            hemiLight.position.set(0, 200, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight('white', 10);
+            dirLight.position.set(0, 200, 100);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.top = 180;
+            dirLight.shadow.camera.bottom = -100;
+            dirLight.shadow.camera.left = -120;
+            dirLight.shadow.camera.right = 120;
+            scene.add(dirLight);
+
+            // Crear el suelo
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshPhongMaterial({ color: '#1888ef', depthWrite: false }));
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Crear el cargador FBX
+            loader = new FBXLoader();
+            loadAsset(params.asset);
+
+            // Configuración del renderizador
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setAnimationLoop(animate);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Controles de órbita para la cámara
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 100, 0);
+            controls.update();
+
+            // Event listeners
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keydown', onMovementKeyDown);
+            document.addEventListener('keydown', onCameraMoveKeyDown);
+
+            // Añadir estadísticas de rendimiento
+            stats = new Stats();
+            container.appendChild(stats.dom);
+
+            // Control de niebla
+            const fogControl = document.createElement('input');
+            fogControl.type = 'range';
+            fogControl.min = '200';
+            fogControl.max = '2500';
+            fogControl.value = initialFogDistance.toString();
+            fogControl.className = 'slider';
+            fogControl.id = 'fogRange';
+            container.appendChild(fogControl);
+
+            fogControl.addEventListener('input', function () {
+                const fogDistance = parseInt(this.value);
+                scene.fog.far = fogDistance;
+                scene.fog.near = fogDistance * 0.5;
+                renderer.render(scene, camera); S
+            });
+            // Crear corazones para la escena
+            function createHeartShape() {
+                const heartShape = new THREE.Shape();
+                const x = 0, y = 0;
+
+                heartShape.moveTo(x + 5, y + 5);
+                heartShape.bezierCurveTo(x + 5, y + 5, x + 4, y, x, y);
+                heartShape.bezierCurveTo(x - 6, y, x - 6, y + 7, x - 6, y + 7);
+                heartShape.bezierCurveTo(x - 6, y + 11, x - 3, y + 15.4, x + 5, y + 19);
+                heartShape.bezierCurveTo(x + 12, y + 15.4, x + 16, y + 11, x + 16, y + 7);
+                heartShape.bezierCurveTo(x + 16, y + 7, x + 16, y, x + 10, y);
+                heartShape.bezierCurveTo(x + 7, y, x + 5, y + 5, x + 5, y + 5);
+
+                return heartShape;
+            }
+
+            const heartShape = createHeartShape();
+            const heartExtrudeSettings = { depth: 5, bevelEnabled: false };
+            const heartGeometry = new THREE.ExtrudeGeometry(heartShape, heartExtrudeSettings);
+            const pinkMaterial = new THREE.MeshPhongMaterial({ color: '#faa5ba', flatShading: true });
+
+            for (let i = 0; i < 150; i++) {
+                const heart = new THREE.Mesh(heartGeometry, pinkMaterial);
+                heart.position.x = Math.random() * 1600 - 800; // Posición aleatoria en el rango [-800, 800]
+                heart.position.y = 250;
+                heart.position.z = Math.random() * 1600 - 800; // Posición aleatoria en el rango [-800, 800]
+                heart.scale.set(3, 3, 3); // Escalar el corazón para que sea visible
+
+                // Rotar el corazón para que no esté boca abajo
+                heart.rotation.x = Math.PI; // Rotar 180 grados alrededor del eje X
+
+                scene.add(heart);
+            }
+
+            // Crear estrellas para la escena
+            function createStarShape() {
+                const starShape = new THREE.Shape();
+                const outerRadius = 10;
+                const innerRadius = 4;
+                const points = 5;
+
+                for (let i = 0; i < points; i++) {
+                    starShape.lineTo(Math.cos((i * 2 * Math.PI) / points) * outerRadius, Math.sin((i * 2 * Math.PI) / points) * outerRadius);
+                    starShape.lineTo(Math.cos(((i + 0.5) * 2 * Math.PI) / points) * innerRadius, Math.sin(((i + 0.5) * 2 * Math.PI) / points) * innerRadius);
+                }
+                starShape.closePath();
+                return starShape;
+            }
+
+            const starShape = createStarShape();
+            const starExtrudeSettings = { depth: 5, bevelEnabled: false };
+            const starGeometry = new THREE.ExtrudeGeometry(starShape, starExtrudeSettings);
+            const yellowMaterial = new THREE.MeshPhongMaterial({ color: 'yellow', flatShading: true });
+
+            for (let i = 0; i < 150; i++) {
+                const star = new THREE.Mesh(starGeometry, yellowMaterial);
+                star.position.x = Math.random() * 1600 - 800; // Posición aleatoria en el rango [-800, 800]
+                star.position.y = 30;
+                star.position.z = Math.random() * 1600 - 800; // Posición aleatoria en el rango [-800, 800]
+                star.scale.set(5, 5, 5); // Escalar la estrella para que sea visible
+
+                // Rotar la estrella para que esté orientada correctamente
+                star.rotation.z = Math.PI / 2; // Rotar 90 grados alrededor del eje Z
+
+                scene.add(star);
+            }
+
+
+
+            const cones = [];
+
+            for (let i = 0; i < 150; i++) {
+                const mesh = new THREE.Mesh(geometry, blueMaterial);
+
+                if (Math.random() < 0.5) {
+                    mesh.material = redMaterial;
+                }
+
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                mesh.position.x = Math.random() * 1600 - 800;
+                mesh.position.y = characterBaseHeight;
+                mesh.position.z = Math.random() * 1600 - 800;
+
+                mesh.updateMatrix();
+                mesh.matrixAutoUpdate = false;
+
+                scene.add(mesh);
+                cones.push(mesh);
+            }
+
+            function loadAsset(asset) {
+                loader.load('models/fbx/' + asset + '.fbx', function (group) {
+                    if (object) {
+                        object.traverse(function (child) {
+                            if (child.material) child.material.dispose();
+                            if (child.material && child.material.map) child.material.map.dispose();
+                            if (child.geometry) child.geometry.dispose();
+                        });
+                        scene.remove(object);
+                    }
+
+                    object = group;
+
+                    if (object.animations && object.animations.length) {
+                        mixer = new THREE.AnimationMixer(object);
+                        const action = mixer.clipAction(object.animations[0]);
+                        action.play();
+                    } else {
+                        mixer = null;
+                    }
+
+                    object.traverse(function (child) {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                        }
+                    });
+
+                    scene.add(object);
+                    console.log("Modelo cargado: ", object);
+
+                    // Aquí cargamos la skin y la aplicamos al modelo principal
+                    loadSkin('models/fbx/Mutant.fbx');
+                }, undefined, function (error) {
+                    console.error("Error al cargar el modelo: ", error);
+                });
+            }
+
+            function loadSkin(skinPath) {
+                loader.load(skinPath, function (skinGroup) {
+                    const skinMaterials = {};
+
+                    skinGroup.traverse(function (child) {
+                        if (child.isMesh) {
+                            skinMaterials[child.name] = child.material;
+                        }
+                    });
+
+                    object.traverse(function (child) {
+                        if (child.isMesh && skinMaterials[child.name]) {
+                            child.material = skinMaterials[child.name];
+                        }
+                    });
+
+                    console.log("Skin cargada y aplicada: ", skinGroup);
+                }, undefined, function (error) {
+                    console.error("Error al cargar la skin: ", error);
+                });
+            }
+
+
+
+            // Función de animación
+            function animate() {
+                const delta = clock.getDelta();
+                if (mixer) mixer.update(delta);
+                renderer.render(scene, camera);
+                stats.update();
+                checkCollisions();
+            }
+
+            // Función para ajustar el tamaño de la ventana
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            // Función para manejar cambios de animación con teclas numéricas
+            function onKeyDown(event) {
+                switch (event.keyCode) {
+                    case 49:
+                        loadAsset('Bashful');
+                        break;
+                    case 50:
+                        loadAsset('Fall B Land To Standing Idle');
+                        break;
+                    case 51:
+                        loadAsset('Jogging');
+                        break;
+                    case 52:
+                        loadAsset('Standard Walk');
+                        break;
+                    case 53:
+                        loadAsset('Hip Hop Dancing');
+                        break;
+                    case 54:
+                        loadAsset('Sitting Clap');
+                        break;
+                    case 55:
+                        loadAsset('Standing Greeting');
+                        break;
+                }
+            }
+
+            // Función para manejar el movimiento del objeto con teclas W, A, S, D
+            function onMovementKeyDown(event) {
+                if (!object) return;
+
+                switch (event.keyCode) {
+                    case 87: // W
+                        moveForward();
+                        break;
+                    case 83: // S
+                        moveBackward();
+                        break;
+                    case 65: // A
+                        moveLeft();
+                        break;
+                    case 68: // D
+                        moveRight();
+                        break;
+                }
+            }
+
+            // Funciones para mover el objeto en diferentes direcciones
+            function moveForward() {
+                object.translateZ(-step);
+            }
+
+            function moveBackward() {
+                object.translateZ(step);
+            }
+
+            function moveLeft() {
+                object.rotateY(Math.PI / 2);
+                object.translateZ(-step);
+            }
+
+            function moveRight() {
+                object.rotateY(-Math.PI / 2);
+                object.translateZ(-step);
+            }
+
+            // Función para mover la cámara con las teclas de flechas
+            function onCameraMoveKeyDown(event) {
+                switch (event.keyCode) {
+                    case 38: // Arrow Up
+                        camera.position.z -= cameraStep;
+                        break;
+                    case 40: // Arrow Down
+                        camera.position.z += cameraStep;
+                        break;
+                    case 37: // Arrow Left
+                        camera.position.x -= cameraStep;
+                        break;
+                    case 39: // Arrow Right
+                        camera.position.x += cameraStep;
+                        break;
+                }
+            }
+
+            // Función para verificar colisiones entre el objeto y los conos
+            function checkCollisions() {
+                if (!object) return;
+                const characterBox = new THREE.Box3().setFromObject(object);
+
+                cones.forEach(cone => {
+                    const coneBox = new THREE.Box3().setFromObject(cone);
+                    if (characterBox.intersectsBox(coneBox)) {
+                        console.log('Colisión detectada!');
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+
+</html>
